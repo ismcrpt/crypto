@@ -9,7 +9,7 @@ contract CustomSplitter {
     address public owner;
     uint256 public totalParticipants;
     uint256 public numberOfWinners;
-    uint256 public creatorFeePercentage = 20; // Creator's commission percentage
+    uint256 public creatorFeePercentage = 0.8; // Creator's fee percentage (0.8% = 0.008)
 
     address[] public winners;
     bool public roundInProgress;
@@ -26,19 +26,19 @@ contract CustomSplitter {
         roundInProgress = true;
     }
 
-    // Function for depositing MATIC into the contract
+    // Function to deposit MATIC into the contract
     function deposit() public payable {
         require(msg.value == 0, "Use the transferMATIC function to deposit MATIC");
     }
 
-    // Function for transferring MATIC
+    // Function to transfer MATIC
     function transferMATIC(uint256 amount) public {
         require(amount > 0, "You must send some MATIC");
         
         // Ensure that the user sends MATIC to the correct contract address
         require(msg.sender == address(this), "Send MATIC to the contract address");
         
-        // Transfer MATIC to the contract's account
+        // Transfer MATIC to the contract's balance
         IERC20(maticTokenAddress).transferFrom(msg.sender, address(this), amount);
         
         userBalances[msg.sender] += amount;
@@ -54,22 +54,25 @@ contract CustomSplitter {
 
         require(winners.length < numberOfWinners, "All winners are already determined");
 
-        // Total amount of contributions from participants
+        // Total pot of participants' contributions
         uint256 totalPot = contractBalance;
 
-        // Total balance of winners
+        // Total balance of the winners
         uint256 totalWinnersBalance = 0;
         for (uint256 i = 0; i < winners.length; i++) {
             totalWinnersBalance += userBalances[winners[i]];
         }
 
-        // Calculate the user's winnings proportionally to their balance
-        uint256 userShare = (userBalance * 80 * totalPot) / (100 * totalWinnersBalance);
+        // Calculate the distribution factor
+        uint256 distributionFactor = ((totalPot * 100) - (creatorFeePercentage * totalPot)) / totalWinnersBalance;
+
+        // Calculate the user's share proportionally to their balance
+        uint256 userShare = (userBalance * distributionFactor) / 100;
 
         userBalances[msg.sender] -= userBalance;
         contractBalance -= userBalance;
 
-        // Send winnings in MATIC
+        // Send the winnings in MATIC
         IERC20(maticTokenAddress).transfer(msg.sender, userShare);
 
         winners.push(msg.sender);
@@ -77,7 +80,7 @@ contract CustomSplitter {
         if (winners.length == numberOfWinners) {
             roundInProgress = false;
             uint256 creatorFee = (contractBalance * creatorFeePercentage) / 100;
-            IERC20(maticTokenAddress).transfer(owner, creatorFee); // Send creator's commission
+            IERC20(maticTokenAddress).transfer(owner, creatorFee); // Send the creator's fee
             autoReset();
         }
     }
